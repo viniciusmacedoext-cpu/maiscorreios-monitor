@@ -1,0 +1,40 @@
+name: Deploy Frontend to GitHub Pages
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'monit_completo/maiscorreios-monitor/maiscorreios-frontend/**'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monit_completo/maiscorreios-monitor/maiscorreios-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: corepack enable && corepack prepare pnpm@10.4.1 --activate
+      - run: pnpm install --frozen-lockfile
+      - name: Build with API base
+        run: pnpm build
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: monit_completo/maiscorreios-monitor/maiscorreios-frontend/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+
