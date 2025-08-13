@@ -31,6 +31,9 @@ function App() {
   const [syntheticSteps, setSelectedTestSteps] = useState([])
 
   const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+  
+  console.log('API_BASE:', API_BASE)
+  console.log('Environment:', import.meta.env.MODE)
 
   // Cores para as linhas do gráfico consolidado
   const chartColors = [
