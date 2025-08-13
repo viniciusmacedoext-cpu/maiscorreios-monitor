@@ -28,15 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app/backend
 
 # Copy backend requirements and install
-COPY maiscorreios-monitor/maiscorreios-monitor/requirements.txt ./
+COPY maiscorreios-monitor/requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Copy backend source
-COPY maiscorreios-monitor/maiscorreios-monitor/src ./src
-# Optional: drivers are not required; Selenium Manager will fetch compatible driver
-# Remove the next line (invalid shell redirection in COPY). If you need custom drivers,
-# add them to the repo and copy plainly without redirections.
-# COPY maiscorreios-monitor/maiscorreios-monitor/drivers ./drivers
+COPY maiscorreios-monitor/src ./src
 
 # Copy frontend dist into backend static
 RUN mkdir -p src/static
