@@ -62,9 +62,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/urls`)
       const data = await response.json()
-      if (data.success) {
-        setUrls(data.urls)
-      }
+      setUrls(data)
     } catch (error) {
       console.error('Erro ao buscar URLs:', error)
     } finally {
@@ -76,9 +74,12 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/stats`)
       const data = await response.json()
-      if (data.success) {
-        setStats(data.stats)
-      }
+      setStats({
+        total_urls: data.total_urls,
+        online_urls: data.online_count,
+        offline_urls: data.offline_count,
+        checks_last_24h: data.total_checks_24h
+      })
     } catch (error) {
       console.error('Erro ao buscar estatísticas:', error)
     }
@@ -86,11 +87,9 @@ function App() {
 
   const fetchConsolidatedData = async () => {
     try {
-      const response = await fetch(`${API_BASE}/consolidated-data?hours=${consolidatedPeriod}`)
+      const response = await fetch(`${API_BASE}/overview?hours=${consolidatedPeriod}`)
       const data = await response.json()
-      if (data.success) {
-        setConsolidatedData(data.consolidated_data)
-      }
+      setConsolidatedData(data)
     } catch (error) {
       console.error('Erro ao buscar dados consolidados:', error)
     }
@@ -98,11 +97,9 @@ function App() {
 
   const fetchPerformanceSummary = async () => {
     try {
-      const response = await fetch(`${API_BASE}/performance-summary?hours=${consolidatedPeriod}`)
+      const response = await fetch(`${API_BASE}/overview?hours=${consolidatedPeriod}`)
       const data = await response.json()
-      if (data.success) {
-        setPerformanceSummary(data.performance_summary)
-      }
+      setPerformanceSummary(data)
     } catch (error) {
       console.error('Erro ao buscar resumo de performance:', error)
     }
@@ -112,9 +109,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-tests`)
       const data = await response.json()
-      if (data.success) {
-        setSyntheticTests(data.tests)
-      }
+      setSyntheticTests(data)
     } catch (error) {
       console.error('Erro ao buscar testes sintéticos:', error)
     }
@@ -124,9 +119,12 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-stats`)
       const data = await response.json()
-      if (data.success) {
-        setSyntheticStats(data.stats)
-      }
+      setSyntheticStats({
+        total_tests: data.active_tests,
+        success_rate: data.success_rate,
+        executions_24h: data.total_executions,
+        avg_duration: data.avg_duration
+      })
     } catch (error) {
       console.error('Erro ao buscar estatísticas sintéticas:', error)
     }
@@ -139,17 +137,13 @@ function App() {
         method: 'POST'
       })
       const data = await response.json()
-      if (data.success) {
-        alert('Teste sintético iniciado com sucesso! Os resultados aparecerão em breve.')
-        // Atualizar dados após alguns segundos
-        setTimeout(() => {
-          fetchSyntheticTests()
-          fetchSyntheticStats()
-          fetchTestResults(testId) // Buscar resultados específicos deste teste
-        }, 5000)
-      } else {
-        alert(data.error || 'Erro ao executar teste sintético')
-      }
+      alert('Teste sintético iniciado com sucesso! Os resultados aparecerão em breve.')
+      // Atualizar dados após alguns segundos
+      setTimeout(() => {
+        fetchSyntheticTests()
+        fetchSyntheticStats()
+        fetchTestResults(testId) // Buscar resultados específicos deste teste
+      }, 5000)
     } catch (error) {
       console.error('Erro ao executar teste sintético:', error)
       alert('Erro ao executar teste sintético')
@@ -162,21 +156,17 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-tests/${testId}/results`)
       const data = await response.json()
-      if (data.success) {
-        setSelectedTestResults(data.results)
-      }
+      setSelectedTestResults(data)
     } catch (error) {
       console.error('Erro ao buscar resultados do teste:', error)
     }
   }
 
-  const fetchTestSteps = async (resultId) => {
+  const fetchTestSteps = async (testId, resultId) => {
     try {
-      const response = await fetch(`${API_BASE}/synthetic-results/${resultId}/steps`)
+      const response = await fetch(`${API_BASE}/synthetic-tests/${testId}/results/${resultId}/steps`)
       const data = await response.json()
-      if (data.success) {
-        setSelectedTestSteps(data.steps)
-      }
+      setSelectedTestSteps(data)
     } catch (error) {
       console.error('Erro ao buscar passos do teste:', error)
     }
@@ -681,7 +671,7 @@ function App() {
                     <Activity className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{syntheticStats.total_executions || 0}</div>
+                    <div className="text-2xl font-bold">{syntheticStats.executions_24h || 0}</div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -808,7 +798,7 @@ function App() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => fetchTestSteps(result.id)}
+                              onClick={() => fetchTestSteps(result.test_id, result.id)}
                             >
                               Ver Passos
                             </Button>
