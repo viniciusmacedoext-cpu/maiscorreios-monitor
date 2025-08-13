@@ -12,7 +12,6 @@ from src.routes.monitor import monitor_bp
 from src.routes.synthetic import synthetic_bp
 ## Alertas removidos a pedido do usuário
 from src.scheduler import init_scheduler
-import json
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 # Use SECRET_KEY from environment in production; fallback for local dev
@@ -61,20 +60,15 @@ with app.app_context():
     # Adiciona teste sintético inicial se não existir (sem dados sensíveis)
     existing_test = SyntheticTest.query.filter_by(test_name='Fluxo de Compra - Mais Correios').first()
     if not existing_test:
-        default_config = {
-            'site_url': 'https://www.maiscorreios.com.br',
-            'email': os.environ.get('SYNTHETIC_TEST_EMAIL', 'teste@exemplo.com'),
-            'password': os.environ.get('SYNTHETIC_TEST_PASSWORD', 'senha123'),
-            'product_name': 'envelope',
-            'address': os.environ.get('SYNTHETIC_TEST_ADDRESS', 'Rua Exemplo, 123'),
-            'payment_method': 'pix'
-        }
-
         synthetic_test = SyntheticTest(
             test_name='Fluxo de Compra - Mais Correios',
-            test_type='purchase_flow',
             site_url='https://www.maiscorreios.com.br',
-            config_json=json.dumps(default_config)
+            email=os.environ.get('SYNTHETIC_TEST_EMAIL', 'teste@exemplo.com'),
+            password=os.environ.get('SYNTHETIC_TEST_PASSWORD', 'senha123'),
+            product_name='envelope',
+            address=os.environ.get('SYNTHETIC_TEST_ADDRESS', 'Rua Exemplo, 123'),
+            payment_method='pix',
+            headless=True
         )
         db.session.add(synthetic_test)
     
