@@ -98,6 +98,8 @@ def serve(path):
 
 
 if __name__ == '__main__':
+    # Deploy version: 2025-08-13 - Latest fixes for synthetic tests
+    app.run(host='0.0.0.0', port=5001, debug=False)
     # Inicializa os agendadores
     url_scheduler, synthetic_scheduler = init_scheduler(app)
     
