@@ -33,7 +33,10 @@ RUN pip install -r requirements.txt
 
 # Copy backend source
 COPY maiscorreios-monitor/maiscorreios-monitor/src ./src
-COPY maiscorreios-monitor/maiscorreios-monitor/drivers ./drivers 2>/dev/null || true
+# Optional: drivers are not required; Selenium Manager will fetch compatible driver
+# Remove the next line (invalid shell redirection in COPY). If you need custom drivers,
+# add them to the repo and copy plainly without redirections.
+# COPY maiscorreios-monitor/maiscorreios-monitor/drivers ./drivers
 
 # Copy frontend dist into backend static
 RUN mkdir -p src/static
