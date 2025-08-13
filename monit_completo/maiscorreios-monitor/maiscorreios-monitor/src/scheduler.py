@@ -1,10 +1,11 @@
 import threading
 import time
 from datetime import datetime
-from src.models.url_monitor import db, MonitoredURL, URLCheck
+from src.models.url_monitor import MonitoredURL, URLCheck, db
+from src.models.synthetic_monitor import SyntheticTest, SyntheticTestResult, SyntheticTestStep
 from src.routes.monitor import check_url_status
-from src.models.synthetic_monitor import SyntheticTest
 from src.routes.synthetic import execute_test_async
+from src.utils.timezone import format_brazil_time
 
 class URLMonitorScheduler:
     def __init__(self, app):
@@ -13,71 +14,57 @@ class URLMonitorScheduler:
         self.thread = None
         
     def start(self):
-        """Inicia o agendador"""
         if not self.running:
             self.running = True
-            self.thread = threading.Thread(target=self._run_scheduler, daemon=True)
+            self.thread = threading.Thread(target=self._run, daemon=True)
             self.thread.start()
-            print("✅ Agendador de monitoramento iniciado - verificações a cada 10 minutos")
+            print(f"🔄 Scheduler de URLs iniciado - {format_brazil_time()}")
     
     def stop(self):
-        """Para o agendador"""
         self.running = False
         if self.thread:
             self.thread.join()
-        print("🛑 Agendador de monitoramento parado")
+            print(f"⏹️ Scheduler de URLs parado - {format_brazil_time()}")
     
-    def _run_scheduler(self):
-        """Loop principal do agendador"""
+    def _run(self):
         while self.running:
             try:
-                self._check_all_urls()
-                # Aguarda 10 minutos (600 segundos)
-                for _ in range(600):
-                    if not self.running:
-                        break
-                    time.sleep(1)
+                with self.app.app_context():
+                    self._check_all_urls()
+                time.sleep(300)  # 5 minutos
             except Exception as e:
-                print(f"❌ Erro no agendador: {e}")
-                time.sleep(60)  # Aguarda 1 minuto antes de tentar novamente
+                print(f"❌ Erro no scheduler de URLs: {e} - {format_brazil_time()}")
+                time.sleep(60)  # 1 minuto em caso de erro
     
     def _check_all_urls(self):
-        """Verifica todas as URLs ativas"""
-        with self.app.app_context():
+        urls = MonitoredURL.query.filter_by(is_active=True).all()
+        if not urls:
+            return
+        
+        print(f"🔍 Iniciando verificação de {len(urls)} URLs - {format_brazil_time()}")
+        
+        for url in urls:
             try:
-                urls = MonitoredURL.query.filter_by(is_active=True).all()
-                print(f"🔍 Iniciando verificação de {len(urls)} URLs - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                status, response_time, status_code, error_message = check_url_status(url.url)
                 
-                for url in urls:
-                    try:
-                        check_result = check_url_status(url.url)
-                        
-                        new_check = URLCheck(
-                            url_id=url.id,
-                            status=check_result['status'],
-                            response_time=check_result['response_time'],
-                            status_code=check_result['status_code'],
-                            error_message=check_result['error_message']
-                        )
-                        
-                        db.session.add(new_check)
-
-                        # (alertas removidos a pedido)
-                        
-                        # Log do resultado
-                        status_icon = "✅" if check_result['status'] == 'online' else "❌"
-                        response_time_str = f"({check_result['response_time']:.2f}s)" if check_result['response_time'] else ""
-                        print(f"{status_icon} {url.name}: {check_result['status']} {response_time_str}")
-                        
-                    except Exception as e:
-                        print(f"❌ Erro ao verificar {url.name}: {e}")
+                check = URLCheck(
+                    url_id=url.id,
+                    status=status,
+                    response_time=response_time,
+                    status_code=status_code,
+                    error_message=error_message
+                )
                 
+                db.session.add(check)
                 db.session.commit()
-                print(f"✅ Verificação concluída - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                print(f"✅ {url.name}: {status} ({response_time:.2f}s) - {format_brazil_time()}")
                 
             except Exception as e:
-                print(f"❌ Erro na verificação geral: {e}")
-                db.session.rollback()
+                print(f"❌ Erro ao verificar {url.name}: {e} - {format_brazil_time()}")
+                continue
+        
+        print(f"✅ Verificação concluída - {format_brazil_time()}")
 
 class SyntheticTestScheduler:
     def __init__(self, app):
@@ -86,60 +73,49 @@ class SyntheticTestScheduler:
         self.thread = None
         
     def start(self):
-        """Inicia o agendador de testes sintéticos"""
         if not self.running:
             self.running = True
-            self.thread = threading.Thread(target=self._run_scheduler, daemon=True)
+            self.thread = threading.Thread(target=self._run, daemon=True)
             self.thread.start()
-            print("✅ Agendador de testes sintéticos iniciado - execuções a cada 30 minutos")
+            print(f"🔄 Scheduler de testes sintéticos iniciado - {format_brazil_time()}")
     
     def stop(self):
-        """Para o agendador"""
         self.running = False
         if self.thread:
             self.thread.join()
-        print("🛑 Agendador de testes sintéticos parado")
+            print(f"⏹️ Scheduler de testes sintéticos parado - {format_brazil_time()}")
     
-    def _run_scheduler(self):
-        """Loop principal do agendador"""
+    def _run(self):
         while self.running:
             try:
-                self._execute_all_tests()
-                # Aguarda 30 minutos (1800 segundos)
-                for _ in range(1800):
-                    if not self.running:
-                        break
-                    time.sleep(1)
+                with self.app.app_context():
+                    self._execute_all_tests()
+                time.sleep(1800)  # 30 minutos
             except Exception as e:
-                print(f"❌ Erro no agendador de testes sintéticos: {e}")
-                time.sleep(60)  # Aguarda 1 minuto antes de tentar novamente
+                print(f"❌ Erro no scheduler de testes sintéticos: {e} - {format_brazil_time()}")
+                time.sleep(300)  # 5 minutos em caso de erro
     
     def _execute_all_tests(self):
-        """Executa todos os testes sintéticos ativos"""
-        with self.app.app_context():
+        tests = SyntheticTest.query.filter_by(is_active=True).all()
+        if not tests:
+            return
+        
+        print(f"🔍 Iniciando execução de {len(tests)} testes sintéticos - {format_brazil_time()}")
+        
+        for test in tests:
             try:
-                tests = SyntheticTest.query.filter_by(is_active=True).all()
-                print(f"🔍 Iniciando execução de {len(tests)} testes sintéticos - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                for test in tests:
-                    try:
-                        print(f"🔄 Executando teste: {test.test_name}")
-                        execute_test_async(test.id, self.app)
-                        # (alertas removidos a pedido)
-                    except Exception as e:
-                        print(f"❌ Erro ao executar teste {test.test_name}: {e}")
-                
-                print(f"✅ Execução de testes sintéticos iniciada - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
+                execute_test_async(test.id, self.app)
+                print(f"✅ Teste {test.test_name} iniciado - {format_brazil_time()}")
             except Exception as e:
-                print(f"❌ Erro na execução geral de testes sintéticos: {e}")
+                print(f"❌ Erro ao executar teste {test.test_name}: {e} - {format_brazil_time()}")
+                continue
+        
+        print(f"✅ Execução de testes sintéticos iniciada - {format_brazil_time()}")
 
 def init_scheduler(app):
-    """Inicializa os agendadores"""
     url_scheduler = URLMonitorScheduler(app)
     synthetic_scheduler = SyntheticTestScheduler(app)
     
-    # Inicia ambos os agendadores
     url_scheduler.start()
     synthetic_scheduler.start()
     

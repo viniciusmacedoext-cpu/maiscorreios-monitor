@@ -1,340 +1,216 @@
-from flask import Blueprint, jsonify, request
-from src.models.url_monitor import db, MonitoredURL, URLCheck
-from datetime import datetime, timedelta
 import requests
-import time
-import threading
+from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify
+from src.models.url_monitor import db, MonitoredURL, URLCheck
+from src.utils.timezone import get_brazil_datetime_for_db
 
 monitor_bp = Blueprint('monitor', __name__)
 
-def check_url_status(url):
+def check_url_status(url, timeout=10):
     """Verifica o status de uma URL"""
     try:
-        start_time = time.time()
-        response = requests.get(url, timeout=30, allow_redirects=True)
-        response_time = time.time() - start_time
+        start_time = datetime.now()
+        response = requests.get(url, timeout=timeout, allow_redirects=True)
+        end_time = datetime.now()
         
-        if response.status_code == 200:
-            return {
-                'status': 'online',
-                'response_time': response_time,
-                'status_code': response.status_code,
-                'error_message': None
-            }
+        response_time = (end_time - start_time).total_seconds()
+        
+        if response.status_code < 400:
+            return 'online', response_time, response.status_code, None
         else:
-            return {
-                'status': 'offline',
-                'response_time': response_time,
-                'status_code': response.status_code,
-                'error_message': f'HTTP {response.status_code}'
-            }
+            return 'offline', response_time, response.status_code, f"HTTP {response.status_code}"
+            
     except requests.exceptions.Timeout:
-        return {
-            'status': 'offline',
-            'response_time': None,
-            'status_code': None,
-            'error_message': 'Timeout - Site não respondeu em 30 segundos'
-        }
+        return 'offline', timeout, None, "Timeout"
     except requests.exceptions.ConnectionError:
-        return {
-            'status': 'offline',
-            'response_time': None,
-            'status_code': None,
-            'error_message': 'Erro de conexão - Site inacessível'
-        }
+        return 'offline', 0, None, "Connection Error"
     except Exception as e:
-        return {
-            'status': 'offline',
-            'response_time': None,
-            'status_code': None,
-            'error_message': f'Erro: {str(e)}'
-        }
+        return 'error', 0, None, str(e)
 
 @monitor_bp.route('/urls', methods=['GET'])
 def get_urls():
     """Lista todas as URLs monitoradas"""
-    try:
-        urls = MonitoredURL.query.filter_by(is_active=True).all()
-        return jsonify({
-            'success': True,
-            'urls': [url.to_dict() for url in urls]
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    urls = MonitoredURL.query.all()
+    return jsonify([url.to_dict() for url in urls])
 
 @monitor_bp.route('/urls', methods=['POST'])
 def add_url():
     """Adiciona uma nova URL para monitoramento"""
-    try:
-        data = request.get_json()
-        
-        if not data or not data.get('url') or not data.get('name'):
-            return jsonify({
-                'success': False,
-                'error': 'URL e nome são obrigatórios'
-            }), 400
-        
-        # Verifica se a URL já existe
-        existing = MonitoredURL.query.filter_by(url=data['url']).first()
-        if existing:
-            return jsonify({
-                'success': False,
-                'error': 'Esta URL já está sendo monitorada'
-            }), 400
-        
-        # Cria nova URL
-        new_url = MonitoredURL(
-            name=data['name'],
-            url=data['url']
-        )
-        
-        db.session.add(new_url)
-        db.session.commit()
-        
-        # Faz uma verificação inicial
-        check_result = check_url_status(data['url'])
-        initial_check = URLCheck(
-            url_id=new_url.id,
-            status=check_result['status'],
-            response_time=check_result['response_time'],
-            status_code=check_result['status_code'],
-            error_message=check_result['error_message']
-        )
-        
-        db.session.add(initial_check)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'url': new_url.to_dict()
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    data = request.get_json()
+    
+    if not data or not data.get('name') or not data.get('url'):
+        return jsonify({'error': 'Nome e URL são obrigatórios'}), 400
+    
+    # Verifica se a URL já existe
+    existing_url = MonitoredURL.query.filter_by(url=data['url']).first()
+    if existing_url:
+        return jsonify({'error': 'URL já está sendo monitorada'}), 400
+    
+    # Cria nova URL
+    new_url = MonitoredURL(
+        name=data['name'],
+        url=data['url']
+    )
+    
+    db.session.add(new_url)
+    db.session.commit()
+    
+    # Faz primeira verificação
+    status, response_time, status_code, error_message = check_url_status(data['url'])
+    
+    first_check = URLCheck(
+        url_id=new_url.id,
+        status=status,
+        response_time=response_time,
+        status_code=status_code,
+        error_message=error_message
+    )
+    
+    db.session.add(first_check)
+    db.session.commit()
+    
+    return jsonify(new_url.to_dict()), 201
+
+@monitor_bp.route('/urls/<int:url_id>', methods=['PUT'])
+def update_url(url_id):
+    """Atualiza uma URL monitorada"""
+    url = MonitoredURL.query.get_or_404(url_id)
+    data = request.get_json()
+    
+    if data.get('name'):
+        url.name = data['name']
+    if data.get('url'):
+        url.url = data['url']
+    if 'is_active' in data:
+        url.is_active = data['is_active']
+    
+    db.session.commit()
+    return jsonify(url.to_dict())
 
 @monitor_bp.route('/urls/<int:url_id>', methods=['DELETE'])
 def delete_url(url_id):
     """Remove uma URL do monitoramento"""
-    try:
-        url = MonitoredURL.query.get_or_404(url_id)
-        url.is_active = False
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'URL removida do monitoramento'
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    url = MonitoredURL.query.get_or_404(url_id)
+    db.session.delete(url)
+    db.session.commit()
+    return jsonify({'message': 'URL removida com sucesso'})
 
 @monitor_bp.route('/urls/<int:url_id>/check', methods=['POST'])
-def check_single_url(url_id):
+def check_url(url_id):
     """Verifica uma URL específica"""
-    try:
-        url = MonitoredURL.query.get_or_404(url_id)
-        
-        check_result = check_url_status(url.url)
-        new_check = URLCheck(
-            url_id=url.id,
-            status=check_result['status'],
-            response_time=check_result['response_time'],
-            status_code=check_result['status_code'],
-            error_message=check_result['error_message']
-        )
-        
-        db.session.add(new_check)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'check': new_check.to_dict()
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@monitor_bp.route('/check-all', methods=['POST'])
-def check_all_urls():
-    """Verifica todas as URLs ativas"""
-    try:
-        urls = MonitoredURL.query.filter_by(is_active=True).all()
-        
-        def check_url_async(url):
-            check_result = check_url_status(url.url)
-            new_check = URLCheck(
-                url_id=url.id,
-                status=check_result['status'],
-                response_time=check_result['response_time'],
-                status_code=check_result['status_code'],
-                error_message=check_result['error_message']
-            )
-            db.session.add(new_check)
-        
-        # Verifica todas as URLs
-        for url in urls:
-            check_url_async(url)
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'{len(urls)} URLs verificadas'
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    url = MonitoredURL.query.get_or_404(url_id)
+    
+    status, response_time, status_code, error_message = check_url_status(url.url)
+    
+    check = URLCheck(
+        url_id=url.id,
+        status=status,
+        response_time=response_time,
+        status_code=status_code,
+        error_message=error_message
+    )
+    
+    db.session.add(check)
+    db.session.commit()
+    
+    return jsonify({
+        'url_id': url.id,
+        'status': status,
+        'response_time': response_time,
+        'status_code': status_code,
+        'error_message': error_message,
+        'checked_at': check.checked_at.isoformat() if check.checked_at else None
+    })
 
 @monitor_bp.route('/urls/<int:url_id>/history', methods=['GET'])
 def get_url_history(url_id):
-    """Obtém o histórico de verificações de uma URL"""
-    try:
-        limit = request.args.get('limit', 20, type=int)
-        
-        checks = URLCheck.query.filter_by(url_id=url_id)\
-                              .order_by(URLCheck.checked_at.desc())\
-                              .limit(limit).all()
-        
-        return jsonify({
-            'success': True,
-            'history': [check.to_dict() for check in checks]
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    """Obtém histórico de verificações de uma URL"""
+    url = MonitoredURL.query.get_or_404(url_id)
+    
+    # Parâmetros de filtro
+    hours = request.args.get('hours', 24, type=int)
+    limit = request.args.get('limit', 100, type=int)
+    
+    since = get_brazil_datetime_for_db() - timedelta(hours=hours)
+    
+    checks = URLCheck.query.filter(
+        URLCheck.url_id == url_id,
+        URLCheck.checked_at >= since
+    ).order_by(URLCheck.checked_at.desc()).limit(limit).all()
+    
+    return jsonify([check.to_dict() for check in checks])
 
 @monitor_bp.route('/stats', methods=['GET'])
 def get_stats():
     """Obtém estatísticas gerais do monitoramento"""
-    try:
-        total_urls = MonitoredURL.query.filter_by(is_active=True).count()
-        
-        # URLs online (última verificação)
-        online_urls = 0
-        offline_urls = 0
-        
-        for url in MonitoredURL.query.filter_by(is_active=True).all():
-            latest_check = URLCheck.query.filter_by(url_id=url.id)\
-                                        .order_by(URLCheck.checked_at.desc()).first()
-            if latest_check:
-                if latest_check.status == 'online':
-                    online_urls += 1
-                else:
-                    offline_urls += 1
-        
-        # Verificações nas últimas 24h
-        yesterday = datetime.now() - timedelta(hours=24)
-        checks_24h = URLCheck.query.filter(URLCheck.checked_at >= yesterday).count()
-        
-        return jsonify({
-            'success': True,
-            'stats': {
-                'total_urls': total_urls,
-                'online_urls': online_urls,
-                'offline_urls': offline_urls,
-                'checks_last_24h': checks_24h
-            }
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    # Parâmetros de filtro
+    hours = request.args.get('hours', 24, type=int)
+    
+    since = get_brazil_datetime_for_db() - timedelta(hours=hours)
+    
+    # Total de URLs
+    total_urls = MonitoredURL.query.filter_by(is_active=True).count()
+    
+    # URLs online/offline (baseado na última verificação)
+    online_count = 0
+    offline_count = 0
+    
+    urls = MonitoredURL.query.filter_by(is_active=True).all()
+    for url in urls:
+        latest_check = URLCheck.query.filter_by(url_id=url.id).order_by(URLCheck.checked_at.desc()).first()
+        if latest_check:
+            if latest_check.status == 'online':
+                online_count += 1
+            else:
+                offline_count += 1
+    
+    # Total de verificações no período
+    total_checks = URLCheck.query.filter(URLCheck.checked_at >= since).count()
+    
+    # Tempo médio de resposta
+    avg_response_time = db.session.query(db.func.avg(URLCheck.response_time)).filter(
+        URLCheck.checked_at >= since,
+        URLCheck.status == 'online'
+    ).scalar() or 0
+    
+    return jsonify({
+        'total_urls': total_urls,
+        'online_count': online_count,
+        'offline_count': offline_count,
+        'total_checks_24h': total_checks,
+        'avg_response_time': round(avg_response_time, 2) if avg_response_time else 0,
+        'period_hours': hours
+    })
 
-@monitor_bp.route('/consolidated-data', methods=['GET'])
-def get_consolidated_data():
-    """Obtém dados consolidados para gráfico"""
-    try:
-        hours = request.args.get('hours', 24, type=int)
-        since = datetime.now() - timedelta(hours=hours)
+@monitor_bp.route('/overview', methods=['GET'])
+def get_overview():
+    """Obtém visão geral do monitoramento"""
+    # Parâmetros de filtro
+    hours = request.args.get('hours', 24, type=int)
+    
+    since = get_brazil_datetime_for_db() - timedelta(hours=hours)
+    
+    # URLs com suas últimas verificações
+    urls = MonitoredURL.query.filter_by(is_active=True).all()
+    url_data = []
+    
+    for url in urls:
+        latest_check = URLCheck.query.filter_by(url_id=url.id).order_by(URLCheck.checked_at.desc()).first()
         
-        urls = MonitoredURL.query.filter_by(is_active=True).all()
-        consolidated_data = []
+        # Verificações no período
+        checks_in_period = URLCheck.query.filter(
+            URLCheck.url_id == url.id,
+            URLCheck.checked_at >= since
+        ).count()
         
-        for url in urls:
-            checks = URLCheck.query.filter_by(url_id=url.id)\
-                                  .filter(URLCheck.checked_at >= since)\
-                                  .order_by(URLCheck.checked_at.asc()).all()
-            
-            data_points = []
-            for check in checks:
-                data_points.append({
-                    'timestamp': check.checked_at.isoformat(),
-                    'response_time': check.response_time * 1000 if check.response_time else 0,
-                    'status': check.status
-                })
-            
-            consolidated_data.append({
-                'url_name': url.name,
-                'url_id': url.id,
-                'data_points': data_points
-            })
-        
-        return jsonify({
-            'success': True,
-            'consolidated_data': consolidated_data
+        url_data.append({
+            'id': url.id,
+            'name': url.name,
+            'url': url.url,
+            'is_active': url.is_active,
+            'latest_check': latest_check.to_dict() if latest_check else None,
+            'checks_in_period': checks_in_period
         })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@monitor_bp.route('/performance-summary', methods=['GET'])
-def get_performance_summary():
-    """Obtém resumo de performance das URLs"""
-    try:
-        hours = request.args.get('hours', 24, type=int)
-        since = datetime.now() - timedelta(hours=hours)
-        
-        urls = MonitoredURL.query.filter_by(is_active=True).all()
-        summary = []
-        
-        for url in urls:
-            checks = URLCheck.query.filter_by(url_id=url.id)\
-                                  .filter(URLCheck.checked_at >= since).all()
-            
-            if not checks:
-                continue
-            
-            response_times = [c.response_time for c in checks if c.response_time]
-            online_checks = [c for c in checks if c.status == 'online']
-            
-            summary.append({
-                'url_name': url.name,
-                'url_id': url.id,
-                'total_checks': len(checks),
-                'online_checks': len(online_checks),
-                'uptime_percentage': (len(online_checks) / len(checks)) * 100 if checks else 0,
-                'avg_response_time': sum(response_times) / len(response_times) if response_times else 0,
-                'min_response_time': min(response_times) if response_times else 0,
-                'max_response_time': max(response_times) if response_times else 0
-            })
-        
-        return jsonify({
-            'success': True,
-            'performance_summary': summary
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    
+    return jsonify(url_data)
 

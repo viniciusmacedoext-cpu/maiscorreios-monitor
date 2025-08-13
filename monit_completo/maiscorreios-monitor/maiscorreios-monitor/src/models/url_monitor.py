@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pytz
+from src.utils.timezone import get_brazil_datetime_for_db
 
 db = SQLAlchemy()
 
@@ -11,7 +12,7 @@ class MonitoredURL(db.Model):
     name = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500), nullable=False, unique=True)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now())
+    created_at = db.Column(db.DateTime, default=get_brazil_datetime_for_db)
     
     # Relacionamento com verificações
     checks = db.relationship('URLCheck', backref='monitored_url', lazy=True, cascade='all, delete-orphan')
@@ -39,7 +40,7 @@ class URLCheck(db.Model):
     response_time = db.Column(db.Float)  # em segundos
     status_code = db.Column(db.Integer)
     error_message = db.Column(db.Text)
-    checked_at = db.Column(db.DateTime, default=lambda: datetime.now())
+    checked_at = db.Column(db.DateTime, default=get_brazil_datetime_for_db)
     
     def __repr__(self):
         return f'<URLCheck {self.url_id}: {self.status} at {self.checked_at}>'
