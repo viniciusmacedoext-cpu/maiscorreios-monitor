@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: maiscorreios-backend
+    env: docker
+    plan: free
+    autoDeploy: true
+    dockerfilePath: monit_completo/maiscorreios-monitor/Dockerfile
+    dockerContext: monit_completo/maiscorreios-monitor
+    healthCheckPath: /api/urls
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: SYNTHETIC_TEST_EMAIL
+        sync: false
+      - key: SYNTHETIC_TEST_PASSWORD
+        sync: false
+      - key: SYNTHETIC_TEST_ADDRESS
+        sync: false
+
+
