@@ -282,7 +282,7 @@ function App() {
   }
 
   const formatResponseTime = (time) => {
-    if (!time) return 'N/A'
+    if (!time || typeof time !== 'number' || isNaN(time)) return 'N/A'
     return `${(time * 1000).toFixed(0)}ms`
   }
 
@@ -626,25 +626,25 @@ function App() {
                           <div>
                             <p className="text-sm text-muted-foreground">Uptime</p>
                             <p className="font-medium text-green-600">
-                              {summary.uptime_percentage.toFixed(1)}%
+                              {summary.uptime_percentage && typeof summary.uptime_percentage === 'number' ? summary.uptime_percentage.toFixed(1) : 0}%
                             </p>
                           </div>
                           <div>
                             <p className="text-sm text-muted-foreground">Tempo Médio</p>
                             <p className="font-medium">
-                              {(summary.avg_response_time * 1000).toFixed(0)}ms
+                              {summary.avg_response_time && typeof summary.avg_response_time === 'number' ? (summary.avg_response_time * 1000).toFixed(0) : 0}ms
                             </p>
                           </div>
                           <div>
                             <p className="text-sm text-muted-foreground">Mínimo</p>
                             <p className="font-medium">
-                              {(summary.min_response_time * 1000).toFixed(0)}ms
+                              {summary.min_response_time && typeof summary.min_response_time === 'number' ? (summary.min_response_time * 1000).toFixed(0) : 0}ms
                             </p>
                           </div>
                           <div>
                             <p className="text-sm text-muted-foreground">Máximo</p>
                             <p className="font-medium">
-                              {(summary.max_response_time * 1000).toFixed(0)}ms
+                              {summary.max_response_time && typeof summary.max_response_time === 'number' ? (summary.max_response_time * 1000).toFixed(0) : 0}ms
                             </p>
                           </div>
                         </div>
@@ -698,7 +698,7 @@ function App() {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{syntheticStats.avg_duration ? Number(syntheticStats.avg_duration).toFixed(0) : 0}s</div>
+                    <div className="text-2xl font-bold">{syntheticStats.avg_duration && typeof syntheticStats.avg_duration === 'number' ? Number(syntheticStats.avg_duration).toFixed(0) : 0}s</div>
                   </CardContent>
                 </Card>
               </div>
@@ -748,7 +748,7 @@ function App() {
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">Duração</p>
                               <p className="text-sm font-medium">
-                                {test.latest_duration ? `${test.latest_duration.toFixed(1)}s` : 'N/A'}
+                                {test.latest_duration && typeof test.latest_duration === 'number' ? `${test.latest_duration.toFixed(1)}s` : 'N/A'}
                               </p>
                             </div>
                             <Button
@@ -807,11 +807,11 @@ function App() {
                           <div className="flex items-center space-x-4">
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">Duração</p>
-                              <p className="text-sm font-medium">{result.duration_seconds?.toFixed(1)}s</p>
+                              <p className="text-sm font-medium">{result.duration_seconds && typeof result.duration_seconds === 'number' ? result.duration_seconds.toFixed(1) : 0}s</p>
                             </div>
                             <div className="text-center">
                               <p className="text-sm text-muted-foreground">Taxa</p>
-                              <p className="text-sm font-medium">{result.success_rate?.toFixed(1)}%</p>
+                              <p className="text-sm font-medium">{result.success_rate && typeof result.success_rate === 'number' ? result.success_rate.toFixed(1) : 0}%</p>
                             </div>
                             <Button
                               variant="outline"
@@ -848,7 +848,7 @@ function App() {
                             <div>
                               <p className="font-medium">{step.step_name.replace('_', ' ').toUpperCase()}</p>
                               <p className="text-sm text-muted-foreground">
-                                {step.duration_seconds?.toFixed(2)}s
+                                {step.duration_seconds && typeof step.duration_seconds === 'number' ? step.duration_seconds.toFixed(2) : 0}s
                               </p>
                             </div>
                           </div>
@@ -891,7 +891,7 @@ function App() {
                             <YAxis />
                             <Tooltip 
                               labelFormatter={(value) => `Verificação ${value}`}
-                              formatter={(value) => [`${value.toFixed(0)}ms`, 'Tempo de Resposta']}
+                              formatter={(value) => [typeof value === 'number' ? `${value.toFixed(0)}ms` : '0ms', 'Tempo de Resposta']}
                             />
                             <Line 
                               type="monotone" 
