@@ -292,27 +292,32 @@ function App() {
   }
 
   const prepareChartData = (history) => {
+    if (!history || !Array.isArray(history)) return []
     return history.slice().reverse().map((check, index) => ({
       index: index + 1,
-      responseTime: check.response_time ? check.response_time * 1000 : 0,
-      status: check.status,
-      time: new Date(check.checked_at).toLocaleTimeString('pt-BR')
+      responseTime: check?.response_time ? check.response_time * 1000 : 0,
+      status: check?.status || 'unknown',
+      time: check?.checked_at ? new Date(check.checked_at).toLocaleTimeString('pt-BR') : 'N/A'
     }))
   }
 
   const prepareConsolidatedChartData = () => {
-    if (!consolidatedData.length) return []
+    if (!consolidatedData || !Array.isArray(consolidatedData) || !consolidatedData.length) return []
 
     // Criar um mapa de timestamps únicos
     const timestampMap = new Map()
     
     consolidatedData.forEach(urlData => {
-      urlData.data_points.forEach(point => {
-        const timestamp = new Date(point.timestamp).getTime()
-        if (!timestampMap.has(timestamp)) {
-          timestampMap.set(timestamp, { timestamp, time: new Date(point.timestamp).toLocaleTimeString('pt-BR') })
-        }
-      })
+      if (urlData && urlData.data_points && Array.isArray(urlData.data_points)) {
+        urlData.data_points.forEach(point => {
+          if (point && point.timestamp) {
+            const timestamp = new Date(point.timestamp).getTime()
+            if (!timestampMap.has(timestamp)) {
+              timestampMap.set(timestamp, { timestamp, time: new Date(point.timestamp).toLocaleTimeString('pt-BR') })
+            }
+          }
+        })
+      }
     })
 
     // Converter para array e ordenar
@@ -323,10 +328,12 @@ function App() {
       const dataPoint = { time: timePoint.time }
       
       consolidatedData.forEach((urlData, index) => {
-        const point = urlData.data_points.find(p => 
-          new Date(p.timestamp).getTime() === timePoint.timestamp
-        )
-        dataPoint[urlData.url_name] = point ? point.response_time : null
+        if (urlData && urlData.data_points && Array.isArray(urlData.data_points)) {
+          const point = urlData.data_points.find(p => 
+            p && p.timestamp && new Date(p.timestamp).getTime() === timePoint.timestamp
+          )
+          dataPoint[urlData.url_name || `URL ${index}`] = point ? point.response_time : null
+        }
       })
       
       return dataPoint
