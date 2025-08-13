@@ -330,63 +330,49 @@ class MaisCorreiosSyntheticEngine:
         return f"{base_url}/checkout/#/{frag}"
 
     def setup_driver(self):
+        """Configura o driver do Chrome com otimizações de memória"""
+        chrome_options = Options()
+        
+        if self.headless:
+            chrome_options.add_argument('--headless')
+        
+        # Otimizações de memória para Render
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-plugins')
+        chrome_options.add_argument('--disable-images')
+        chrome_options.add_argument('--disable-javascript')  # Se possível
+        chrome_options.add_argument('--disable-css')
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+        chrome_options.add_argument('--memory-pressure-off')
+        chrome_options.add_argument('--max_old_space_size=128')
+        chrome_options.add_argument('--single-process')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        chrome_options.add_argument('--disable-renderer-backgrounding')
+        chrome_options.add_argument('--disable-features=TranslateUI')
+        chrome_options.add_argument('--disable-ipc-flooding-protection')
+        
+        # Configurações de memória
+        chrome_options.add_argument('--memory-pressure-off')
+        chrome_options.add_argument('--max_old_space_size=128')
+        chrome_options.add_argument('--js-flags=--max-old-space-size=128')
+        
+        # User agent simples
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+        
         try:
-            # Configurar opções do Chrome
-            chrome_options = Options()
-            if self.headless:
-                chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--window-size=1920,1080')
-            
-            # Verificar se o ChromeDriver está no diretório drivers
-            driver_path = None
-            drivers_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'drivers')
-            chromedriver_path = os.path.join(drivers_dir, 'chromedriver.exe')
-            
-            if os.path.exists(chromedriver_path):
-                self.logger.info(f"Usando ChromeDriver local em: {chromedriver_path}")
-                driver_path = chromedriver_path
-            else:
-                self.logger.warning("ChromeDriver local não encontrado, tentando usar o ChromeDriver do sistema")
-            
-            # Adicionar opções para ignorar incompatibilidade de versão
-            chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-            chrome_options.add_argument('--log-level=3')
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            # Adicionar opção para ignorar erros de certificado
-            chrome_options.add_argument('--ignore-certificate-errors')
-            chrome_options.add_argument('--ignore-ssl-errors')
-            # Reduce automation detectability and improve stability in CI/servers
-            chrome_options.add_argument('--disable-features=IsolateOrigins,site-per-process')
-            chrome_options.add_argument('--disable-dev-tools')
-            
-            # Adicionar opção para ignorar incompatibilidade de versão
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            # Configurações para compatibilidade com ChromeDriver 139
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            
-            # Usar configurações padrão do W3C para compatibilidade com versões mais recentes
-            chrome_options.add_experimental_option("w3c", True)
-            
-            # Inicializar o driver com o caminho do ChromeDriver se disponível
-            if driver_path:
-                # Usar diretamente o ChromeDriver local que baixamos
-                self.logger.info(f"Usando ChromeDriver local em: {driver_path}")
-                service = Service(executable_path=driver_path)
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            else:
-                # Tentar inicializar sem especificar o caminho
-                self.driver = webdriver.Chrome(options=chrome_options)
-                
+            service = Service()
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.driver.set_page_load_timeout(self.timeout)
+            self.driver.implicitly_wait(5)
+            self.wait = WebDriverWait(self.driver, self.timeout)
             return True
         except Exception as e:
-            self.logger.error(f"Erro ao configurar driver: {str(e)}")
+            self.logger.error(f"Erro ao configurar driver: {e}")
             return False
 
     def navigate_to(self, url):
@@ -459,14 +445,17 @@ class MaisCorreiosSyntheticEngine:
             return False
 
     def cleanup(self):
-        if self.driver:
-            try:
+        """Limpa recursos e libera memória"""
+        try:
+            if self.driver:
                 self.driver.quit()
-                self.logger.info("Driver encerrado com sucesso")
-            except Exception as e:
-                self.logger.error(f"Erro ao encerrar driver: {str(e)}")
-            finally:
                 self.driver = None
+        except Exception as e:
+            self.logger.error(f"Erro ao limpar driver: {e}")
+        
+        # Forçar coleta de lixo
+        import gc
+        gc.collect()
                 
     def execute_full_test(self, config):
         """

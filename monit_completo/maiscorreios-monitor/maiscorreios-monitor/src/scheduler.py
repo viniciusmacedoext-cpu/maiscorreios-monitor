@@ -31,10 +31,10 @@ class URLMonitorScheduler:
             try:
                 with self.app.app_context():
                     self._check_all_urls()
-                time.sleep(300)  # 5 minutos
+                time.sleep(600)  # 10 minutos (aumentado de 5 para 10)
             except Exception as e:
                 print(f"❌ Erro no scheduler de URLs: {e} - {format_brazil_time()}")
-                time.sleep(60)  # 1 minuto em caso de erro
+                time.sleep(120)  # 2 minutos em caso de erro (aumentado de 1 para 2)
     
     def _check_all_urls(self):
         urls = MonitoredURL.query.filter_by(is_active=True).all()
@@ -90,10 +90,10 @@ class SyntheticTestScheduler:
             try:
                 with self.app.app_context():
                     self._execute_all_tests()
-                time.sleep(1800)  # 30 minutos
+                time.sleep(3600)  # 1 hora (aumentado de 30 minutos para 1 hora)
             except Exception as e:
                 print(f"❌ Erro no scheduler de testes sintéticos: {e} - {format_brazil_time()}")
-                time.sleep(300)  # 5 minutos em caso de erro
+                time.sleep(600)  # 10 minutos em caso de erro (aumentado de 5 para 10)
     
     def _execute_all_tests(self):
         tests = SyntheticTest.query.filter_by(is_active=True).all()

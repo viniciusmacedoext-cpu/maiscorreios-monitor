@@ -15,21 +15,23 @@ FROM python:3.10-slim AS backend
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONHASHSEED=random \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Install Google Chrome (for Selenium)
+# Install Google Chrome (for Selenium) with minimal dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget gnupg ca-certificates fonts-liberation libasound2 libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
+    wget gnupg ca-certificates fonts-liberation libasound2 libnss3 libxss1 \
     && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /app/backend
 
 # Copy backend requirements and install
 COPY maiscorreios-monitor/requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source
 COPY maiscorreios-monitor/src ./src
@@ -37,6 +39,10 @@ COPY maiscorreios-monitor/src ./src
 # Copy frontend dist into backend static
 RUN mkdir -p src/static
 COPY --from=frontend /app/frontend/dist/ ./src/static/
+
+# Configurações de memória para Python
+ENV PYTHONMALLOC=malloc
+ENV PYTHONDEVMODE=0
 
 EXPOSE 5001
 
