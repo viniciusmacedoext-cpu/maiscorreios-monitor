@@ -65,9 +65,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/urls`)
       const data = await response.json()
-      setUrls(data)
+      setUrls(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar URLs:', error)
+      setUrls([])
     } finally {
       setLoading(false)
     }
@@ -78,13 +79,14 @@ function App() {
       const response = await fetch(`${API_BASE}/stats`)
       const data = await response.json()
       setStats({
-        total_urls: data.total_urls,
-        online_urls: data.online_count,
-        offline_urls: data.offline_count,
-        checks_last_24h: data.total_checks_24h
+        total_urls: data?.total_urls || 0,
+        online_urls: data?.online_count || 0,
+        offline_urls: data?.offline_count || 0,
+        checks_last_24h: data?.total_checks_24h || 0
       })
     } catch (error) {
       console.error('Erro ao buscar estatísticas:', error)
+      setStats({ total_urls: 0, online_urls: 0, offline_urls: 0, checks_last_24h: 0 })
     }
   }
 
@@ -92,9 +94,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/overview?hours=${consolidatedPeriod}`)
       const data = await response.json()
-      setConsolidatedData(data)
+      setConsolidatedData(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar dados consolidados:', error)
+      setConsolidatedData([])
     }
   }
 
@@ -102,9 +105,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/overview?hours=${consolidatedPeriod}`)
       const data = await response.json()
-      setPerformanceSummary(data)
+      setPerformanceSummary(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar resumo de performance:', error)
+      setPerformanceSummary([])
     }
   }
 
@@ -112,9 +116,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-tests`)
       const data = await response.json()
-      setSyntheticTests(data)
+      setSyntheticTests(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar testes sintéticos:', error)
+      setSyntheticTests([])
     }
   }
 
@@ -123,13 +128,14 @@ function App() {
       const response = await fetch(`${API_BASE}/synthetic-stats`)
       const data = await response.json()
       setSyntheticStats({
-        total_tests: data.active_tests,
-        success_rate: data.success_rate,
-        executions_24h: data.total_executions,
-        avg_duration: data.avg_duration
+        total_tests: data?.active_tests || 0,
+        success_rate: data?.success_rate || 0,
+        executions_24h: data?.total_executions || 0,
+        avg_duration: data?.avg_duration || 0
       })
     } catch (error) {
       console.error('Erro ao buscar estatísticas sintéticas:', error)
+      setSyntheticStats({ total_tests: 0, success_rate: 0, executions_24h: 0, avg_duration: 0 })
     }
   }
 
@@ -159,9 +165,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-tests/${testId}/results`)
       const data = await response.json()
-      setSelectedTestResults(data)
+      setSelectedTestResults(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar resultados do teste:', error)
+      setSelectedTestResults([])
     }
   }
 
@@ -169,9 +176,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/synthetic-tests/${testId}/results/${resultId}/steps`)
       const data = await response.json()
-      setSelectedTestSteps(data)
+      setSelectedTestSteps(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Erro ao buscar passos do teste:', error)
+      setSelectedTestSteps([])
     }
   }
 
